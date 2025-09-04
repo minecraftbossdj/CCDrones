@@ -16,10 +16,9 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
-public class DroneEntityRenderer extends MobRenderer<DroneEntity,DroneEntityModel> {
+public class DroneEntityRenderer extends MobRenderer<DroneEntity,DroneEntityModelNew> {
     public DroneEntityRenderer(EntityRendererProvider.Context context) {
-        super(context, new DroneEntityModel(context.bakeLayer(ClientInit.MODEL_DRONE_LAYER)), 0.5f);
-
+        super(context, new DroneEntityModelNew(context.bakeLayer(ClientInit.MODEL_DRONE_LAYER)), 0.5f);
     }
 
     @Override
@@ -42,6 +41,9 @@ public class DroneEntityRenderer extends MobRenderer<DroneEntity,DroneEntityMode
             Minecraft.getInstance().getBlockRenderer().renderSingleBlock(state,poseStack,multiBufferSource,i, OverlayTexture.NO_OVERLAY);
             poseStack.popPose();
         }
+
+        this.model.modem_upgrade.visible = mob.hasUpgrade("modem");
+        this.model.survey_upgrade.visible = mob.hasUpgrade("survey");
 
         if(!mob.getPassengers().isEmpty())
         {

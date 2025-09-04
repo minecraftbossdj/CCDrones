@@ -1,0 +1,22 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "group": "ccdrones:crowbar",
+  "key": {
+    "I": {
+      "item": "minecraft:iron_ingot"
+    },
+    "C": {
+      "item": "minecraft:copper_ingot"
+    }
+  },
+  "pattern": [
+    " II",
+    " C ",
+    "IC "
+  ],
+  "result": {
+    "item": "ccdrones:crowbar"
+  },
+  "show_notification": true
+}

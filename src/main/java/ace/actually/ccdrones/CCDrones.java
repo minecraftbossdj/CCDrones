@@ -3,11 +3,19 @@ package ace.actually.ccdrones;
 import ace.actually.ccdrones.blocks.DroneWorkbenchBlock;
 import ace.actually.ccdrones.blocks.DroneWorkbenchBlockEntity;
 import ace.actually.ccdrones.blocks.DroneWorkbenchPeripheral;
+import ace.actually.ccdrones.entities.DroneAPI;
 import ace.actually.ccdrones.entities.DroneEntity;
 import ace.actually.ccdrones.items.CrowbarItem;
+import ace.actually.ccdrones.items.DroneControllerItem;
 import ace.actually.ccdrones.items.DroneItem;
 import ace.actually.ccdrones.items.DroneUpgradeItem;
+import dan200.computercraft.api.ComputerCraftAPI;
+import dan200.computercraft.api.component.ComputerComponent;
+import dan200.computercraft.api.component.ComputerComponents;
 import dan200.computercraft.api.peripheral.PeripheralLookup;
+import dan200.computercraft.shared.computer.core.ServerComputer;
+import dan200.computercraft.shared.turtle.apis.TurtleAPI;
+import dan200.computercraft.shared.turtle.core.TurtleAccessInternal;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
 import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
@@ -21,6 +29,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
@@ -36,6 +45,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Objects;
 
 public class CCDrones implements ModInitializer {
     public static final Logger LOGGER = LoggerFactory.getLogger("ccdrones");
@@ -55,6 +65,7 @@ public class CCDrones implements ModInitializer {
         registerEntities();
         registerPeripherals();
         registerItems();
+        registerAPIs();
 
     }
 
@@ -67,12 +78,14 @@ public class CCDrones implements ModInitializer {
 
     public static final DroneItem DRONE_ITEM = new DroneItem(new Item.Properties());
     public static final CrowbarItem CROWBAR_ITEM = new CrowbarItem();
+    public static final DroneControllerItem DRONE_CONTROLLER_ITEM = new DroneControllerItem();
     private void registerItems()
     {
         int v = BuiltInRegistries.ITEM.size();
         Registry.register(BuiltInRegistries.ITEM,new ResourceLocation("ccdrones","drone_workbench"),new BlockItem(DRONE_WORKBENCH_BLOCK,new Item.Properties()));
         Registry.register(BuiltInRegistries.ITEM,new ResourceLocation("ccdrones","drone_item"),DRONE_ITEM);
         Registry.register(BuiltInRegistries.ITEM,new ResourceLocation("ccdrones","crowbar"),CROWBAR_ITEM);
+        Registry.register(BuiltInRegistries.ITEM,new ResourceLocation("ccdrones","drone_controller"),DRONE_CONTROLLER_ITEM);
         registerUpgrades();
         for (int i = v; i < BuiltInRegistries.ITEM.size(); i++) {
             int finalI = i;
@@ -84,7 +97,7 @@ public class CCDrones implements ModInitializer {
     }
 
 
-    public static final String[] UPGRADES = new String[]{"mine","carry","survey"};
+    public static final String[] UPGRADES = new String[]{"mine","carry","survey","modem"};
     private void registerUpgrades()
     {
          for (String upgrade: UPGRADES)
@@ -103,6 +116,15 @@ public class CCDrones implements ModInitializer {
         PeripheralLookup.get().registerForBlockEntity((a,b)->new DroneWorkbenchPeripheral(a),DRONE_WORKBENCH_BE);
     }
 
+    //Components
+    public static final ComputerComponent<DroneEntity> DRONEAPI = ComputerComponent.create("cclink", "drone");
+
+    private void registerAPIs() {
+        ComputerCraftAPI.registerAPIFactory(computer -> {
+            var entity = computer.getComponent(DRONEAPI);
+            return new DroneAPI(entity);
+        });
+    }
 
     public static final EntityType<DroneEntity> DRONE = Registry.register(
             BuiltInRegistries.ENTITY_TYPE,

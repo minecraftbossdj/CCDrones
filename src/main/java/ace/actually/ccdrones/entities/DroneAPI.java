@@ -7,9 +7,11 @@ import dan200.computercraft.api.client.FabricComputerCraftAPIClient;
 import dan200.computercraft.api.detail.BlockReference;
 import dan200.computercraft.api.detail.VanillaDetailRegistries;
 import dan200.computercraft.api.filesystem.MountConstants;
+import dan200.computercraft.api.filesystem.WritableMount;
 import dan200.computercraft.api.lua.ILuaAPI;
 import dan200.computercraft.api.lua.LuaFunction;
 import dan200.computercraft.api.lua.MethodResult;
+import dan200.computercraft.core.computer.mainthread.MainThread;
 import dan200.computercraft.core.filesystem.FileSystemException;
 import dan200.computercraft.core.filesystem.FileSystemWrapper;
 import dan200.computercraft.core.util.PeripheralHelpers;
@@ -21,7 +23,12 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.projectile.AbstractArrow;
+import net.minecraft.world.entity.projectile.Arrow;
 import net.minecraft.world.entity.projectile.ProjectileUtil;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
@@ -51,24 +58,24 @@ public class DroneAPI implements ILuaAPI {
     }
 
     @LuaFunction
-    public final void debug()
-    {
-        System.out.println(drone.getOnPos().toShortString());
-    }
-
-    @LuaFunction
-    public final void engineOn(boolean on)
+    public final MethodResult engineOn(boolean on)
     {
         drone.setEngineOn(on);
         if(!on)
         {
             drone.setDeltaMovement(Vec3.ZERO);
         }
+        if (on) {
+            return MethodResult.of(true, "Turned On Engine!");
+        } else {
+            return MethodResult.of(true, "Turned Off Engine"); //true since it suceeded turning off
+        }
     }
     @LuaFunction
-    public final void hoverOn(boolean on)
+    public final MethodResult hoverOn(boolean on)
     {
         drone.setNoGravity(on);
+        if (on) {return MethodResult.of(true, "Hover on!");} else {return MethodResult.of(true, "Hover Off!");}
     }
     @LuaFunction
     public final void right(int deg) {
@@ -104,32 +111,34 @@ public class DroneAPI implements ILuaAPI {
         ClipContext context = new ClipContext(drone.getOnPos().getCenter(),drone.getOnPos().getCenter().add(drone.getForward().multiply(-3,-3,-3)), ClipContext.Block.COLLIDER, ClipContext.Fluid.ANY,drone);
         BlockHitResult result = drone.level().clip(context);
 
-        //System.out.println(result.getBlockPos()+" "+drone.level().getBlockState(result.getBlockPos()));
         return MethodResult.of(VanillaDetailRegistries.BLOCK_IN_WORLD.getDetails(new BlockReference(drone.level(),result.getBlockPos())));
     }
 
     @LuaFunction
-    public final void breakForward()
+    public final MethodResult breakForward()
     {
-        if(drone.hasUpgrade("mine"))
-        {
+        if(drone.hasUpgrade("mine")) {
             ClipContext context = new ClipContext(drone.getOnPos().getCenter(),drone.getOnPos().getCenter().add(drone.getForward().multiply(3,3,3)), ClipContext.Block.COLLIDER, ClipContext.Fluid.ANY,drone);
             BlockHitResult result = drone.level().clip(context);
 
             drone.level().destroyBlock(result.getBlockPos(),true,drone);
+            return MethodResult.of(true,"Broke Block!");
+        } else {
+            return MethodResult.of(false, "Mining Upgrade Not Installed!");
         }
-
     }
 
     @LuaFunction(mainThread = true)
-    public final void pickupBlock()
+    public final MethodResult pickupBlock()
     {
-        if(drone.hasUpgrade("carry"))
-        {
+        if(drone.hasUpgrade("carry")) {
             ClipContext context = new ClipContext(drone.getOnPos().getCenter(),drone.getOnPos().getCenter().add(0,-2,0), ClipContext.Block.COLLIDER, ClipContext.Fluid.ANY,drone);
             BlockHitResult result = drone.level().clip(context);
 
             drone.setCarrying(result.getBlockPos());
+            return MethodResult.of(true, "Picked Up Block!");
+        } else {
+            return MethodResult.of(false, "Carry Upgrade Not Installed!");
         }
 
     }
@@ -143,16 +152,21 @@ public class DroneAPI implements ILuaAPI {
     }
 
     @LuaFunction(mainThread = true)
-    public final void pickUpEntity()
+    public final MethodResult pickUpEntity()
     {
 
         if(drone.hasUpgrade("carry"))
         {
             List<Entity> targets = drone.level().getEntitiesOfClass(Entity.class,new AABB(drone.getOnPos().offset(-2,-2,-2),drone.getOnPos().offset(2,0,2)));
-            if(!targets.isEmpty())
-            {
+            if(!targets.isEmpty()) {
                 targets.get(drone.getRandom().nextInt(targets.size())).startRiding(drone);
+                return MethodResult.of(true, "Picked up Entity!");
+            } else {
+                return MethodResult.of(false, "No Entities Nearby!");
             }
+
+        } else {
+            return MethodResult.of(false, "Carry Upgrade Not Installed!");
         }
 
     }
@@ -177,12 +191,27 @@ public class DroneAPI implements ILuaAPI {
     }
 
     @LuaFunction(mainThread = true)
-    public final void dropEntity()
+    public final MethodResult dropEntity()
     {
         if(!drone.getPassengers().isEmpty())
         {
             drone.ejectPassengers();
+            return MethodResult.of(true,"Ejected Passenger!");
+        } else {
+            return MethodResult.of(false, "No Passengers!");
         }
+    }
+
+    @LuaFunction(mainThread = true)
+    public final MethodResult getPos() {
+        if (drone.hasUpgrade("modem")) {
+            Map<String, Object> info = new HashMap<>();
+            info.put("x", drone.position().x);
+            info.put("y", drone.position().y);
+            info.put("z", drone.position().z);
+            return MethodResult.of(true,info);
+        }
+        return MethodResult.of(false,"Modem Upgrade Not Installed!");
     }
 
 
@@ -190,18 +219,20 @@ public class DroneAPI implements ILuaAPI {
     {
 
         try {
-            //an example of writing files to the filesystem on a turtleCommand
-            if(!computer.getAPIEnvironment().getFileSystem().exists("/startup/go.lua"))
-            {
+            WritableMount mount = computer.createRootMount();
+            if ((mount == null)) {return;}
 
-
-                FileSystemWrapper<SeekableByteChannel> file = computer.getAPIEnvironment().getFileSystem().openForWrite("/startup/go.lua", MountConstants.WRITE_OPTIONS);
-                file.get().write(ByteBuffer.wrap("drone.debug()\ndrone.engineOn(true)\ndrone.hoverOn(true)\ndrone.left(20)\ndrone.up(16)\nwhile true do\n\tdrone.lookForward()\nend".getBytes(StandardCharsets.UTF_8)));
+            if(!mount.exists("startup/go.lua")) {
+                if (!mount.exists("startup/")) {
+                    mount.makeDirectory("startup");
+                }
+                SeekableByteChannel file = computer.createRootMount().openFile("startup/go.lua",MountConstants.WRITE_OPTIONS);
+                file.write(ByteBuffer.wrap("--default startup program".getBytes(StandardCharsets.UTF_8)));
                 file.close();
                 computer.reboot();
             }
 
-        } catch (FileSystemException | IOException e) {
+        } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }

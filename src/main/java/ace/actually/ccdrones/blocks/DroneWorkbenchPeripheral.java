@@ -5,14 +5,15 @@ import ace.actually.ccdrones.entities.DroneAPI;
 import ace.actually.ccdrones.entities.DroneEntity;
 import dan200.computercraft.api.detail.BlockReference;
 import dan200.computercraft.api.detail.VanillaDetailRegistries;
+import dan200.computercraft.api.filesystem.FileOperationException;
 import dan200.computercraft.api.filesystem.MountConstants;
+import dan200.computercraft.api.filesystem.WritableMount;
 import dan200.computercraft.api.lua.LuaException;
 import dan200.computercraft.api.lua.LuaFunction;
 import dan200.computercraft.api.lua.LuaValues;
 import dan200.computercraft.api.lua.MethodResult;
 import dan200.computercraft.api.peripheral.IComputerAccess;
 import dan200.computercraft.api.peripheral.IPeripheral;
-import dan200.computercraft.core.apis.TableHelper;
 import dan200.computercraft.core.filesystem.FileSystemException;
 import dan200.computercraft.core.filesystem.FileSystemWrapper;
 import dan200.computercraft.shared.computer.core.ServerComputer;
@@ -29,6 +30,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.OpenOption;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -69,8 +71,9 @@ public class DroneWorkbenchPeripheral implements IPeripheral {
         if(blockEntity.hasLevel() && blockEntity.getLevel() instanceof ServerLevel level)
         {
             ServerComputer thisComputer = ServerContext.get(level.getServer()).registry().getComputers().stream().filter(a->a.getID()==compId).findFirst().get();
-            thisComputer.addAPI(new DroneAPI(null));
-            thisComputer.reboot();
+
+            ServerComputer.properties(thisComputer.getID(),thisComputer.getFamily()).addComponent(CCDrones.DRONEAPI,null);
+            //thisComputer.reboot();
         }
     }
 
@@ -95,27 +98,39 @@ public class DroneWorkbenchPeripheral implements IPeripheral {
 
             try {
                 //an example of writing files to the filesystem on a turtleCommand
-                if(thisComputer.getAPIEnvironment().getFileSystem().exists(path))
-                {
+                WritableMount mount = ((ServerComputer) thisComputer).createRootMount();
+
+                if (mount == null) {
+                    return null;
+                }
+
+                if(mount.exists(path)) {
 
 
-                    FileSystemWrapper<SeekableByteChannel> file = thisComputer.getAPIEnvironment().getFileSystem().openForRead(path);
-                    FileSystemWrapper<SeekableByteChannel> droneFile = droneComputer.getAPIEnvironment().getFileSystem().openForWrite("/startup/go.lua",MountConstants.WRITE_OPTIONS);
+                    SeekableByteChannel file = thisComputer.createRootMount().openForRead(path);
+                    SeekableByteChannel droneFile = droneComputer.createRootMount().openFile("startup/go.lua", MountConstants.WRITE_OPTIONS);
 
-                    ByteBuffer byteBuffer = ByteBuffer.allocate((int) file.get().size());
-                    file.get().read(byteBuffer);
+                    System.out.println(path);
+                    System.out.println(file);
+                    System.out.println(droneFile);
+
+                    ByteBuffer byteBuffer = ByteBuffer.allocate((int) file.size());
+                    System.out.println(byteBuffer);
+                    file.read(byteBuffer);
                     String fileString = new String(byteBuffer.array());
                     System.out.println(fileString);
 
-                    droneFile.get().write(ByteBuffer.wrap(fileString.getBytes(StandardCharsets.UTF_8)));
+                    droneFile.write(ByteBuffer.wrap(fileString.getBytes(StandardCharsets.UTF_8)));
                     file.close();
                     droneFile.close();
                     droneComputer.reboot();
                     return MethodResult.of("Successfully copied data to drone, booting it up!");
+                } else {
+                    return MethodResult.of("File does not exist!");
                 }
 
-            } catch (FileSystemException | IOException e) {
-                throw new RuntimeException(e);
+            } catch (IOException e) {
+                return MethodResult.of(e.getMessage()+". most likely a error on our end, drone might not have startup/go.lua");
             }
         }
         return MethodResult.of();

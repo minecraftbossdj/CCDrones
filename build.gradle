@@ -1,7 +1,7 @@
 plugins {
-	id 'fabric-loom' version '1.6-SNAPSHOT'
+	id 'fabric-loom' version '1.10-SNAPSHOT'
 	id 'maven-publish'
-  id "org.jetbrains.kotlin.jvm" version "1.9.24"
+    id "org.jetbrains.kotlin.jvm" version "2.0.20"
 }
 
 version = project.mod_version
@@ -17,22 +17,21 @@ repositories {
 	// Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
 	// See https://docs.gradle.org/current/userguide/declaring_repositories.html
 	// for more information about repositories.
-	repositories {
-		exclusiveContent {
-			forRepository {
-				maven {
-					name = "Cobalt"
-					url = "https://squiddev.cc/maven"
-				}
-			}
-			filter {
-				includeGroup("org.squiddev")
-				includeGroup("cc.tweaked")
-
-			}
-		}
-
-	}
+    maven { url "https://maven.pkg.jetbrains.space/public/p/kotlinx-coroutines/maven" }
+    maven { url "https://maven.pkg.jetbrains.space/kotlin/p/kotlin/dev" }
+    maven { url "https://maven.pkg.jetbrains.space/kotlin/p/kotlin/kotlin-dev" }
+    maven {
+        url "https://maven.squiddev.cc"
+        content {
+            includeGroup("cc.tweaked")
+        }
+    }
+    maven {url "https://maven.squiddev.cc"}
+    maven { url "https://plugins.gradle.org/m2/" }
+    maven { url "https://maven.fabricmc.net/"}
+    maven { url "https://maven.pkg.jetbrains.space/public/p/kotlinx/maven" }
+    mavenCentral()
+    gradlePluginPortal()
 }
 
 dependencies {
@@ -40,7 +39,8 @@ dependencies {
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
 	mappings loom.officialMojangMappings()
 	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-	modApi("cc.tweaked:cc-tweaked-1.20.1-fabric:1.110.3")
+	modImplementation("cc.tweaked:cc-tweaked-1.20.1-fabric:1.116.0")
+    modCompileOnly("cc.tweaked:cc-tweaked-1.20.1-fabric-api:1.116.0")
 	runtimeOnly("com.electronwill.night-config:toml:3.6.5")
 	runtimeOnly("org.squiddev:Cobalt:0.7.3")
 
@@ -62,10 +62,21 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).all {
-	kotlinOptions {
-		jvmTarget = 17
-	}
+    kotlinOptions {
+        jvmTarget = 17
+    }
 }
+
+configurations.all {
+    resolutionStrategy.eachDependency { details ->
+        if (details.requested.group == "org.jetbrains.kotlin" &&
+                details.requested.name == "kotlin-metadata-jvm") {
+            details.useTarget("org.jetbrains.kotlinx:kotlinx-metadata-jvm:0.9.0")
+            details.because("Kotlin plugin requests non-existent kotlin-metadata-jvm, redirect to kotlinx-metadata-jvm")
+        }
+    }
+}
+
 
 java {
 	// Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task

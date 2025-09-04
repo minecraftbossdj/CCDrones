@@ -2,7 +2,10 @@
   "block.ccdrones.drone_workbench": "Drone Workbench",
   "entity.ccdrones.drone": "Drone",
   "item.ccdrones.drone_item": "Drone",
+  "item.ccdrones.crowbar": "Crowbar",
+  "item.ccdrones.drone_controller": "Drone Controller",
   "item.ccdrones.survey_upgrade": "Drone Survey Upgrade",
   "item.ccdrones.mine_upgrade": "Drone Mining Upgrade",
-  "item.ccdrones.carry_upgrade": "Drone Carrying Upgrade"
+  "item.ccdrones.carry_upgrade": "Drone Carrying Upgrade",
+  "item.ccdrones.modem_upgrade": "Drone Modem Upgrade"
 }

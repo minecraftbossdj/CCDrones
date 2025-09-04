@@ -1,6 +1,7 @@
 package ace.actually.ccdrones;
 
 import ace.actually.ccdrones.entities.DroneEntityModel;
+import ace.actually.ccdrones.entities.DroneEntityModelNew;
 import ace.actually.ccdrones.entities.DroneEntityRenderer;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.rendereregistry.v1.EntityRendererRegistry;
@@ -13,6 +14,6 @@ public class ClientInit implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         EntityRendererRegistry.INSTANCE.register(CCDrones.DRONE, DroneEntityRenderer::new);
-        EntityModelLayerRegistry.registerModelLayer(MODEL_DRONE_LAYER, DroneEntityModel::getTexturedData);
+        EntityModelLayerRegistry.registerModelLayer(MODEL_DRONE_LAYER, DroneEntityModelNew::getTexturedData);
     }
 }

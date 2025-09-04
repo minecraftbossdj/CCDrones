@@ -1,0 +1,28 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "group": "ccdrones:drone_controller",
+  "key": {
+    "G": {
+      "item": "minecraft:gold_ingot"
+    },
+    "E": {
+      "item": "computercraft:wireless_modem_advanced"
+    },
+    "N": {
+      "item": "minecraft:nether_star"
+    },
+    "D": {
+      "item": "ccdrones:drone_item"
+    }
+  },
+  "pattern": [
+    "GEG",
+    "GDG",
+    "GNG"
+  ],
+  "result": {
+    "item": "ccdrones:drone_controller"
+  },
+  "show_notification": true
+}

@@ -2,6 +2,8 @@ package ace.actually.ccdrones.entities;
 
 import ace.actually.ccdrones.CCDrones;
 import dan200.computercraft.api.ComputerCraftAPI;
+import dan200.computercraft.core.computer.Computer;
+import dan200.computercraft.core.computer.ComputerSide;
 import dan200.computercraft.shared.computer.core.ComputerFamily;
 import dan200.computercraft.shared.computer.core.ServerComputer;
 import dan200.computercraft.shared.computer.core.ServerContext;
@@ -164,7 +166,8 @@ public class DroneEntity extends Mob {
 
 
     public void addUpgrade(String upgrade) {
-        CompoundTag tag = entityData.get(EXTRA);
+        CompoundTag oldtag = entityData.get(EXTRA);
+        CompoundTag tag = oldtag.copy();
 
         ListTag list;
         if(tag.contains("upgrades"))
@@ -183,7 +186,8 @@ public class DroneEntity extends Mob {
     }
 
     public void removeUpgrades() {
-        CompoundTag tag = entityData.get(EXTRA);
+        CompoundTag oldtag = entityData.get(EXTRA);
+        CompoundTag tag = oldtag.copy();
 
 
         if(tag.contains("upgrades"))
@@ -286,17 +290,14 @@ public class DroneEntity extends Mob {
             }
 
             computer = new ServerComputer(
-                    (ServerLevel) this.level(), this.getOnPos(), getComputerID(), null,
-                    ComputerFamily.NORMAL, Config.computerTermWidth, Config.computerTermHeight
+                    (ServerLevel) this.level(), this.getOnPos(), ServerComputer.properties(getComputerID(),ComputerFamily.ADVANCED)
+                    .addComponent(CCDrones.DRONEAPI,this)
             );
 
             System.out.println("Computer ID: "+computer.getID());
             setComputerUUID(computer.register());
 
-            DroneAPI api = new DroneAPI(this);
-            computer.addAPI(api);
-
-            //shouldMakeBoot=true;
+            shouldMakeBoot=true;
 
             computer.turnOn();
 
