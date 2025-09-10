@@ -59,14 +59,14 @@ public class DroneEntity extends Mob {
     @Override
     public void tick() {
         super.tick();
-        if(!this.level().isClientSide)
-        {
-            ServerComputer computer = createOrUpkeepComputer();
-            computer.keepAlive();
-            if(tickCount>5 && shouldMakeBoot)
-            {
-                DroneAPI.initDrive(computer);
-                shouldMakeBoot=false;
+        if(!this.level().isClientSide) {
+            if (!this.isDeadOrDying()) {
+                ServerComputer computer = createOrUpkeepComputer();
+                computer.keepAlive();
+                if (tickCount > 5 && shouldMakeBoot) {
+                    DroneAPI.initDrive(computer);
+                    shouldMakeBoot = false;
+                }
             }
         }
         if(engineOn())
@@ -257,8 +257,7 @@ public class DroneEntity extends Mob {
     public UUID getComputerUUID()
     {
         CompoundTag tag = entityData.get(EXTRA);
-        if(tag.contains("computerUUID"))
-        {
+        if(tag.contains("computerUUID")) {
             return tag.getUUID("computerUUID");
         }
        return null;
@@ -305,12 +304,26 @@ public class DroneEntity extends Mob {
     @Override
     protected void dropAllDeathLoot(DamageSource damageSource) {
         super.dropAllDeathLoot(damageSource);
+
+        ServerContext context = ServerContext.get(this.getServer());
+        ServerComputer computer = context.registry().get(getComputerUUID());
+        if (computer != null) {
+            computer.close();
+        }
+
+        CompoundTag tag = entityData.get(EXTRA);
+        tag.remove("computerUUID");
+        entityData.set(EXTRA,tag);
+
         ItemStack stack = new ItemStack(CCDrones.DRONE_ITEM);
         CompoundTag compoundTag = new CompoundTag();
         compoundTag.put("extra",getAllData());
+        compoundTag.remove("computerUUID");
         stack.setTag(compoundTag);
         ItemEntity entity = new ItemEntity(level(),getX(),getY(),getZ(),stack);
         level().addFreshEntity(entity);
+
+
     }
 
     @Override

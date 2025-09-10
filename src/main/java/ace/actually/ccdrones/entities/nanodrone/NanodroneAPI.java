@@ -31,9 +31,11 @@ import java.util.Map;
 
 public class NanodroneAPI implements ILuaAPI {
     NanodroneEntity drone;
-    public NanodroneAPI(NanodroneEntity entity)
-    {
-        this.drone=entity;
+    public NanodroneAPI(NanodroneEntity entity) {
+        if (entity != null) {
+            if (!entity.isDeadOrDying())
+                this.drone = entity;
+        }
     }
 
     @Override
@@ -166,6 +168,7 @@ public class NanodroneAPI implements ILuaAPI {
         info.put("x", drone.position().x);
         info.put("y", drone.position().y);
         info.put("z", drone.position().z);
+        System.out.println(drone);
         return MethodResult.of(true,info);
     }
 

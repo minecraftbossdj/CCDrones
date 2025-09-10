@@ -125,12 +125,12 @@ public class CCDrones implements ModInitializer {
     private void registerAPIs() {
         ComputerCraftAPI.registerAPIFactory(computer -> {
             var entity = computer.getComponent(DRONEAPI);
-            return new DroneAPI(entity);
+            return entity == null ? null : new DroneAPI(entity);
         });
 
         ComputerCraftAPI.registerAPIFactory(computer -> {
             var entity = computer.getComponent(NANODRONEAPI);
-            return new NanodroneAPI(entity);
+            return entity == null ? null : new NanodroneAPI(entity);
         });
     }
 

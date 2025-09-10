@@ -80,12 +80,14 @@ public class NanodroneEntity extends Mob {
     public void tick() {
         super.tick();
         if(!this.level().isClientSide) {
-            ServerComputer computer = createOrUpkeepComputer();
-            computer.keepAlive();
-            if(tickCount>5 && shouldMakeBoot)
-            {
-                DroneAPI.initDrive(computer);
-                shouldMakeBoot=false;
+            if (!this.isDeadOrDying()) {
+                ServerComputer computer = createOrUpkeepComputer();
+                computer.keepAlive();
+
+                if(tickCount>5 && shouldMakeBoot) {
+                    DroneAPI.initDrive(computer);
+                    shouldMakeBoot=false;
+                }
             }
         }
         if(engineOn()) {
@@ -142,6 +144,7 @@ public class NanodroneEntity extends Mob {
         super.readAdditionalSaveData(compoundTag);
         entityData.set(EXTRA,compoundTag.getCompound("extra"));
 
+
         ListTag itemsList = compoundTag.getList("Inventory", 10); // 10 = CompoundTag
         for (int i = 0; i < itemsList.size(); i++) {
             CompoundTag itemTag = itemsList.getCompound(i);
@@ -196,8 +199,6 @@ public class NanodroneEntity extends Mob {
         }
         return null;
     }
-
-
 
 
     public MethodResult moveItemTo(Container from, Container to, int fromSlot, int limit, int toSlot) {
@@ -377,10 +378,8 @@ public class NanodroneEntity extends Mob {
                     .addComponent(CCDrones.NANODRONEAPI,this)
             );
 
-            System.out.println("Computer ID: "+computer.getID());
+            //System.out.println("Computer ID: "+computer.getID());
             setComputerUUID(computer.register());
-
-            shouldMakeBoot=true;
 
             computer.turnOn();
         }
@@ -390,12 +389,39 @@ public class NanodroneEntity extends Mob {
     @Override
     protected void dropAllDeathLoot(DamageSource damageSource) {
         super.dropAllDeathLoot(damageSource);
+
+        ServerComputer computer = getServerComputer(this.getServer(),getComputerUUID());
+        if (computer != null) {
+            computer.close();
+        }
+
+        CompoundTag tag = entityData.get(EXTRA);
+        tag.remove("computerUUID");
+        entityData.set(EXTRA,tag);
+
         ItemStack stack = new ItemStack(CCDrones.NANODRONE_ITEM);
         CompoundTag compoundTag = new CompoundTag();
-        compoundTag.put("extra",getAllData()); //TODO: remove "extra" tag
+        compoundTag.put("extra",getAllData()); //TODO: remove unness stuff from extra
+        compoundTag.remove("computerUUID");
+
         stack.setTag(compoundTag);
         ItemEntity entity = new ItemEntity(level(),getX(),getY(),getZ(),stack);//TODO: drop item inside inventory if not empty
         level().addFreshEntity(entity);
+
+        ItemStack invItem = getInventory().getItem(0);
+
+        if (!invItem.isEmpty()) {
+            ItemEntity drop = new ItemEntity(
+                    this.level(),
+                    getX(),
+                    getY(),
+                    getZ(),
+                    invItem
+            );
+
+            level().addFreshEntity(drop);
+        }
+
     }
 
     @Override

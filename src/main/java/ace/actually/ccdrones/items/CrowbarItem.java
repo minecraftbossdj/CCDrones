@@ -1,6 +1,7 @@
 package ace.actually.ccdrones.items;
 
 import ace.actually.ccdrones.entities.DroneEntity;
+import ace.actually.ccdrones.entities.nanodrone.NanodroneEntity;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
@@ -33,6 +34,12 @@ public class CrowbarItem extends SwordItem {
             if (attacker instanceof Player player) {
                 DamageSource dmgSource = attacker.level().damageSources().playerAttack(player);
                 drone.hurt(dmgSource,drone.getMaxHealth());
+            }
+            return true;
+        } else if (target instanceof NanodroneEntity nanodrone) {
+            if (attacker instanceof Player player) {
+                DamageSource dmgSource = attacker.level().damageSources().playerAttack(player);
+                nanodrone.hurt(dmgSource,nanodrone.getMaxHealth());
             }
             return true;
         } else {
