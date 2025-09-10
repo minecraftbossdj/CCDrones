@@ -5,10 +5,9 @@ import ace.actually.ccdrones.blocks.DroneWorkbenchBlockEntity;
 import ace.actually.ccdrones.blocks.DroneWorkbenchPeripheral;
 import ace.actually.ccdrones.entities.DroneAPI;
 import ace.actually.ccdrones.entities.DroneEntity;
-import ace.actually.ccdrones.items.CrowbarItem;
-import ace.actually.ccdrones.items.DroneControllerItem;
-import ace.actually.ccdrones.items.DroneItem;
-import ace.actually.ccdrones.items.DroneUpgradeItem;
+import ace.actually.ccdrones.entities.nanodrone.NanodroneAPI;
+import ace.actually.ccdrones.entities.nanodrone.NanodroneEntity;
+import ace.actually.ccdrones.items.*;
 import dan200.computercraft.api.ComputerCraftAPI;
 import dan200.computercraft.api.component.ComputerComponent;
 import dan200.computercraft.api.component.ComputerComponents;
@@ -33,6 +32,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
+import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
@@ -77,13 +77,14 @@ public class CCDrones implements ModInitializer {
     }
 
     public static final DroneItem DRONE_ITEM = new DroneItem(new Item.Properties());
+    public static final NanodroneItem NANODRONE_ITEM = new NanodroneItem(new Item.Properties());
     public static final CrowbarItem CROWBAR_ITEM = new CrowbarItem();
     public static final DroneControllerItem DRONE_CONTROLLER_ITEM = new DroneControllerItem();
-    private void registerItems()
-    {
+    private void registerItems() {
         int v = BuiltInRegistries.ITEM.size();
         Registry.register(BuiltInRegistries.ITEM,new ResourceLocation("ccdrones","drone_workbench"),new BlockItem(DRONE_WORKBENCH_BLOCK,new Item.Properties()));
         Registry.register(BuiltInRegistries.ITEM,new ResourceLocation("ccdrones","drone_item"),DRONE_ITEM);
+        Registry.register(BuiltInRegistries.ITEM,new ResourceLocation("ccdrones","nanodrone_item"),NANODRONE_ITEM);
         Registry.register(BuiltInRegistries.ITEM,new ResourceLocation("ccdrones","crowbar"),CROWBAR_ITEM);
         Registry.register(BuiltInRegistries.ITEM,new ResourceLocation("ccdrones","drone_controller"),DRONE_CONTROLLER_ITEM);
         registerUpgrades();
@@ -109,6 +110,7 @@ public class CCDrones implements ModInitializer {
     private void registerEntities()
     {
         FabricDefaultAttributeRegistry.register(DRONE, DroneEntity.createMobAttributes());
+        FabricDefaultAttributeRegistry.register(NANODRONE, NanodroneEntity.createMobAttributes());
     }
 
     private void registerPeripherals()
@@ -118,11 +120,17 @@ public class CCDrones implements ModInitializer {
 
     //Components
     public static final ComputerComponent<DroneEntity> DRONEAPI = ComputerComponent.create("cclink", "drone");
+    public static final ComputerComponent<NanodroneEntity> NANODRONEAPI = ComputerComponent.create("cclink", "nanodrone");
 
     private void registerAPIs() {
         ComputerCraftAPI.registerAPIFactory(computer -> {
             var entity = computer.getComponent(DRONEAPI);
             return new DroneAPI(entity);
+        });
+
+        ComputerCraftAPI.registerAPIFactory(computer -> {
+            var entity = computer.getComponent(NANODRONEAPI);
+            return new NanodroneAPI(entity);
         });
     }
 
@@ -130,6 +138,12 @@ public class CCDrones implements ModInitializer {
             BuiltInRegistries.ENTITY_TYPE,
             new ResourceLocation("ccdrones", "drone"),
             FabricEntityTypeBuilder.create(MobCategory.MISC,DroneEntity::new).dimensions(EntityDimensions.fixed(0.5f,0.5f)).build()
+    );
+
+    public static final EntityType<NanodroneEntity> NANODRONE = Registry.register(
+            BuiltInRegistries.ENTITY_TYPE,
+            new ResourceLocation("ccdrones", "nanodrone"),
+            FabricEntityTypeBuilder.create(MobCategory.MISC, NanodroneEntity::new).dimensions(EntityDimensions.fixed(0.25f,0.25f)).build()
     );
 
     public static BlockEntityType<DroneWorkbenchBlockEntity> DRONE_WORKBENCH_BE = Registry.register(

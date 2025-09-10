@@ -61,7 +61,6 @@ public class DroneEntity extends Mob {
         super.tick();
         if(!this.level().isClientSide)
         {
-
             ServerComputer computer = createOrUpkeepComputer();
             computer.keepAlive();
             if(tickCount>5 && shouldMakeBoot)
@@ -69,17 +68,12 @@ public class DroneEntity extends Mob {
                 DroneAPI.initDrive(computer);
                 shouldMakeBoot=false;
             }
-
-
         }
         if(engineOn())
         {
             setDeltaMovement(getForward().multiply(0.1,0.1,0.1));
 
         }
-
-
-
     }
 
     @Override

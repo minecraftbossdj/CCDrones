@@ -1,7 +1,9 @@
 {
   "block.ccdrones.drone_workbench": "Drone Workbench",
   "entity.ccdrones.drone": "Drone",
+  "entity.ccdrones.nanodrone": "Nano Drone",
   "item.ccdrones.drone_item": "Drone",
+  "item.ccdrones.nanodrone_item": "Nano Drone",
   "item.ccdrones.crowbar": "Crowbar",
   "item.ccdrones.drone_controller": "Drone Controller",
   "item.ccdrones.survey_upgrade": "Drone Survey Upgrade",
