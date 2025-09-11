@@ -1,32 +1,17 @@
 package ace.actually.ccdrones.entities.nanodrone;
 
-import ace.actually.ccdrones.entities.DroneEntity;
-import ace.actually.ccdrones.items.DroneUpgradeItem;
 import dan200.computercraft.api.detail.BlockReference;
 import dan200.computercraft.api.detail.VanillaDetailRegistries;
-import dan200.computercraft.api.filesystem.MountConstants;
-import dan200.computercraft.api.filesystem.WritableMount;
 import dan200.computercraft.api.lua.ILuaAPI;
 import dan200.computercraft.api.lua.LuaFunction;
 import dan200.computercraft.api.lua.MethodResult;
-import dan200.computercraft.shared.computer.core.ServerComputer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.Container;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.level.ClipContext;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
-import java.io.IOException;
-import java.lang.invoke.MethodHandle;
-import java.nio.ByteBuffer;
-import java.nio.channels.SeekableByteChannel;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 public class NanodroneAPI implements ILuaAPI {

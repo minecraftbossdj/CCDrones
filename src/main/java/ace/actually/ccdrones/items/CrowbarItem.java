@@ -21,9 +21,8 @@ public class CrowbarItem extends SwordItem {
 
     @Override
     public InteractionResult interactLivingEntity(ItemStack itemStack, Player player, LivingEntity livingEntity, InteractionHand interactionHand) {
-        if(livingEntity instanceof DroneEntity drone && !player.level().isClientSide && player.isCrouching())
-        {
-            drone.removeUpgrades();
+        if(livingEntity instanceof DroneEntity drone && !player.level().isClientSide && player.isCrouching()) {
+            //drone.removeUpgrades();
         }
         return super.interactLivingEntity(itemStack, player, livingEntity, interactionHand);
     }

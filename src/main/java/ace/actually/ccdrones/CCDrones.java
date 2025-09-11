@@ -5,34 +5,35 @@ import ace.actually.ccdrones.blocks.DroneWorkbenchBlockEntity;
 import ace.actually.ccdrones.blocks.DroneWorkbenchPeripheral;
 import ace.actually.ccdrones.entities.DroneAPI;
 import ace.actually.ccdrones.entities.DroneEntity;
+import ace.actually.ccdrones.menu.DroneMenu;
 import ace.actually.ccdrones.entities.nanodrone.NanodroneAPI;
 import ace.actually.ccdrones.entities.nanodrone.NanodroneEntity;
 import ace.actually.ccdrones.items.*;
 import dan200.computercraft.api.ComputerCraftAPI;
 import dan200.computercraft.api.component.ComputerComponent;
-import dan200.computercraft.api.component.ComputerComponents;
 import dan200.computercraft.api.peripheral.PeripheralLookup;
-import dan200.computercraft.shared.computer.core.ServerComputer;
-import dan200.computercraft.shared.turtle.apis.TurtleAPI;
-import dan200.computercraft.shared.turtle.core.TurtleAccessInternal;
+import dan200.computercraft.shared.network.container.ComputerContainerData;
+import dan200.computercraft.shared.network.container.ContainerData;
+import dan200.computercraft.shared.platform.PlatformHelper;
+import dan200.computercraft.shared.platform.RegistrationHelper;
+import dan200.computercraft.shared.platform.RegistryEntry;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
 import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
 import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
 import net.fabricmc.fabric.api.object.builder.v1.entity.FabricDefaultAttributeRegistry;
 import net.fabricmc.fabric.api.object.builder.v1.entity.FabricEntityTypeBuilder;
-import net.fabricmc.fabric.mixin.itemgroup.ItemGroupsMixin;
+import net.fabricmc.fabric.api.screenhandler.v1.ExtendedScreenHandlerType;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
-import net.minecraft.world.entity.ai.attributes.Attribute;
+import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
@@ -43,9 +44,7 @@ import net.minecraft.world.level.block.state.BlockBehaviour;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Objects;
 
 public class CCDrones implements ModInitializer {
     public static final Logger LOGGER = LoggerFactory.getLogger("ccdrones");
@@ -66,7 +65,7 @@ public class CCDrones implements ModInitializer {
         registerPeripherals();
         registerItems();
         registerAPIs();
-
+        registerMenu();
     }
 
     public static final DroneWorkbenchBlock DRONE_WORKBENCH_BLOCK = new DroneWorkbenchBlock(BlockBehaviour.Properties.of());
@@ -79,14 +78,12 @@ public class CCDrones implements ModInitializer {
     public static final DroneItem DRONE_ITEM = new DroneItem(new Item.Properties());
     public static final NanodroneItem NANODRONE_ITEM = new NanodroneItem(new Item.Properties());
     public static final CrowbarItem CROWBAR_ITEM = new CrowbarItem();
-    public static final DroneControllerItem DRONE_CONTROLLER_ITEM = new DroneControllerItem();
     private void registerItems() {
         int v = BuiltInRegistries.ITEM.size();
         Registry.register(BuiltInRegistries.ITEM,new ResourceLocation("ccdrones","drone_workbench"),new BlockItem(DRONE_WORKBENCH_BLOCK,new Item.Properties()));
         Registry.register(BuiltInRegistries.ITEM,new ResourceLocation("ccdrones","drone_item"),DRONE_ITEM);
         Registry.register(BuiltInRegistries.ITEM,new ResourceLocation("ccdrones","nanodrone_item"),NANODRONE_ITEM);
         Registry.register(BuiltInRegistries.ITEM,new ResourceLocation("ccdrones","crowbar"),CROWBAR_ITEM);
-        Registry.register(BuiltInRegistries.ITEM,new ResourceLocation("ccdrones","drone_controller"),DRONE_CONTROLLER_ITEM);
         registerUpgrades();
         for (int i = v; i < BuiltInRegistries.ITEM.size(); i++) {
             int finalI = i;
@@ -98,13 +95,16 @@ public class CCDrones implements ModInitializer {
     }
 
 
-    public static final String[] UPGRADES = new String[]{"mine","carry","survey","modem"};
-    private void registerUpgrades()
-    {
-         for (String upgrade: UPGRADES)
-         {
-            UPGRADE_MAP.put(upgrade,Registry.register(BuiltInRegistries.ITEM,new ResourceLocation("ccdrones",upgrade+"_upgrade"),new DroneUpgradeItem(upgrade)));
-         }
+    public static final Item MINE_UPGRADE = new Item(new Item.Properties());
+    public static final Item CARRY_UPGRADE = new Item(new Item.Properties());
+    public static final Item SURVEY_UPGRADE = new Item(new Item.Properties());
+    public static final Item MODEM_UPGRADE = new Item(new Item.Properties());
+
+    private void registerUpgrades() {
+        Registry.register(BuiltInRegistries.ITEM,new ResourceLocation("ccdrones","mine_upgrade"),MINE_UPGRADE);
+        Registry.register(BuiltInRegistries.ITEM,new ResourceLocation("ccdrones","carry_upgrade"),CARRY_UPGRADE);
+        Registry.register(BuiltInRegistries.ITEM,new ResourceLocation("ccdrones","survey_upgrade"),SURVEY_UPGRADE);
+        Registry.register(BuiltInRegistries.ITEM,new ResourceLocation("ccdrones","modem_upgrade"),MODEM_UPGRADE);
     }
 
     private void registerEntities()
@@ -134,6 +134,16 @@ public class CCDrones implements ModInitializer {
         });
     }
 
+    private static final RegistrationHelper<MenuType<?>> REGISTRY = PlatformHelper.get().createRegistrationHelper(Registries.MENU);
+
+    public static final RegistryEntry<MenuType<DroneMenu>> DRONE_MENU = REGISTRY.register("drone",
+            () -> ContainerData.toType(ComputerContainerData::new, DroneMenu::ofMenuData));
+
+    public static void registerMenu() {
+        REGISTRY.register();
+    }
+
+    //entities
     public static final EntityType<DroneEntity> DRONE = Registry.register(
             BuiltInRegistries.ENTITY_TYPE,
             new ResourceLocation("ccdrones", "drone"),

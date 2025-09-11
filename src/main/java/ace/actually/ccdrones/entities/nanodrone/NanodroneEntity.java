@@ -26,13 +26,16 @@ import net.minecraft.nbt.StringTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.Mth;
 import net.minecraft.world.Clearable;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
@@ -44,6 +47,7 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -57,7 +61,6 @@ import java.util.Objects;
 import java.util.UUID;
 
 public class NanodroneEntity extends Mob {
-
     private final NanodroneInventory inventory = new NanodroneInventory(1);
 
     public Container getInventory() {
@@ -67,6 +70,8 @@ public class NanodroneEntity extends Mob {
     private boolean shouldMakeBoot = false;
     private Vec3 targetPos;
 
+    //entity / mob
+
     public static final EntityDataAccessor<CompoundTag> EXTRA = SynchedEntityData.defineId(NanodroneEntity.class, EntityDataSerializers.COMPOUND_TAG);
     public NanodroneEntity(EntityType<NanodroneEntity> e, Level level) {
         super(e, level);
@@ -74,6 +79,26 @@ public class NanodroneEntity extends Mob {
 
     public static AttributeSupplier.Builder createMobAttributes() {
         return LivingEntity.createLivingAttributes().add(Attributes.FOLLOW_RANGE, (double)16.0F).add(Attributes.ATTACK_KNOCKBACK).add(Attributes.MAX_HEALTH, (double)4.0F);
+    }
+
+    @Override
+    public double getPassengersRidingOffset() {
+        return -2;
+    }
+
+    @Override
+    public InteractionResult mobInteract(Player player, InteractionHand hand) {
+        ItemStack held = player.getItemInHand(hand);
+
+        if (!level().isClientSide) {
+            if (held.isEmpty()) {
+                ServerComputer computer = getServerComputer(player.getServer(), this.getComputerUUID());
+                if (computer == null) {return InteractionResult.FAIL;}
+                PlatformHelper.get().openMenu(player, player.getItemInHand(hand).getHoverName(), (id, inventory, entity) -> new ComputerMenuWithoutInventory((MenuType) ModRegistry.Menus.COMPUTER.get(), id, inventory, (p) -> true, computer), new ComputerContainerData(computer, ItemStack.EMPTY));
+            }
+        }
+
+        return InteractionResult.SUCCESS;
     }
 
     @Override
@@ -116,6 +141,13 @@ public class NanodroneEntity extends Mob {
     }
 
     @Override
+    protected PathNavigation createNavigation(Level level) {
+        return new FlyingPathNavigation(this, level);
+    }
+
+    //save / load stuff
+
+    @Override
     public void addAdditionalSaveData(CompoundTag compoundTag) {
         super.addAdditionalSaveData(compoundTag);
         compoundTag.put("extra",entityData.get(EXTRA));
@@ -155,26 +187,20 @@ public class NanodroneEntity extends Mob {
         }
     }
 
+    public void setAllData(CompoundTag tag) {
+        entityData.set(EXTRA,tag);
+    }
+    public CompoundTag getAllData() {
+        return entityData.get(EXTRA);
+    }
+
+    //computer stuff
     public void setComputerID(int computerID) {
         CompoundTag tag = entityData.get(EXTRA);
         tag.putInt("computerID",computerID);
         entityData.set(EXTRA,tag);
     }
 
-    @Override
-    public InteractionResult mobInteract(Player player, InteractionHand hand) {
-        ItemStack held = player.getItemInHand(hand);
-
-        if (!level().isClientSide) {
-            if (held.isEmpty()) {
-                ServerComputer computer = getServerComputer(player.getServer(), this.getComputerUUID());
-                if (computer == null) {return InteractionResult.FAIL;}
-                PlatformHelper.get().openMenu(player, player.getItemInHand(hand).getHoverName(), (id, inventory, entity) -> new ComputerMenuWithoutInventory((MenuType) ModRegistry.Menus.COMPUTER.get(), id, inventory, (p) -> true, computer), new ComputerContainerData(computer, ItemStack.EMPTY));
-            }
-        }
-
-        return InteractionResult.SUCCESS;
-    }
 
     @Nullable
     public static ServerComputer getServerComputer(ServerComputerRegistry registry, UUID pcUUID) {
@@ -193,6 +219,52 @@ public class NanodroneEntity extends Mob {
         }
     }
 
+    public int getComputerID() {
+        CompoundTag tag = entityData.get(EXTRA);
+        if(tag.contains("computerID"))
+        {
+            return tag.getInt("computerID");
+        }
+        return -1;
+    }
+    public UUID getComputerUUID() {
+        CompoundTag tag = entityData.get(EXTRA);
+        if(tag.contains("computerUUID"))
+        {
+            return tag.getUUID("computerUUID");
+        }
+        return null;
+    }
+
+    public void setComputerUUID(UUID computerUUID) {
+        CompoundTag tag = entityData.get(EXTRA);
+        tag.putUUID("computerUUID",computerUUID);
+        entityData.set(EXTRA,tag);
+    }
+
+    private ServerComputer createOrUpkeepComputer() {
+        ServerContext context = ServerContext.get(this.getServer());
+        ServerComputer computer = context.registry().get(getComputerUUID());
+        if (computer == null) {
+            if (getComputerID() < 0) {
+                setComputerID(ComputerCraftAPI.createUniqueNumberedSaveDir(this.getServer(), IDAssigner.COMPUTER));
+            }
+
+            computer = new ServerComputer(
+                    (ServerLevel) this.level(), this.getOnPos(), ServerComputer.properties(getComputerID(), ComputerFamily.ADVANCED)
+                    .terminalSize(20,10)
+                    .addComponent(CCDrones.NANODRONEAPI,this)
+            );
+
+            //System.out.println("Computer ID: "+computer.getID());
+            setComputerUUID(computer.register());
+
+            computer.turnOn();
+        }
+        return computer;
+    }
+
+    //inventory stuff
     public Container getContainer(int x,int y,int z) {
         if (this.level().getBlockEntity(new BlockPos(x,y,z)) instanceof Container contain) {
             return contain;
@@ -273,43 +345,7 @@ public class NanodroneEntity extends Mob {
         }
     }
 
-    public void setComputerUUID(UUID computerUUID) {
-        CompoundTag tag = entityData.get(EXTRA);
-        tag.putUUID("computerUUID",computerUUID);
-        entityData.set(EXTRA,tag);
-    }
-
-    public void removeUpgrades() {
-        CompoundTag oldtag = entityData.get(EXTRA);
-        CompoundTag tag = oldtag.copy();
-
-
-        if(tag.contains("upgrades"))
-        {
-            ListTag list = (ListTag) tag.get("upgrades");
-            for (int i = 0; i < list.size(); i++) {
-                String v = list.getString(i);
-                ItemStack stack = new ItemStack(CCDrones.UPGRADE_MAP.get(v));
-                ItemEntity entity = new ItemEntity(level(),getX(),getY(),getZ(),stack);
-                level().addFreshEntity(entity);
-            }
-
-            tag.remove("upgrades");
-        }
-
-        entityData.set(EXTRA,tag);
-    }
-
-    public ListTag getUpgrades()
-    {
-        CompoundTag tag = entityData.get(EXTRA);
-        if(tag.contains("upgrades"))
-        {
-            return (ListTag) tag.get("upgrades");
-        }
-        return null;
-    }
-
+    //drone / lua stuff
     public void setEngineOn(boolean on)
     {
         CompoundTag tag = entityData.get(EXTRA);
@@ -326,65 +362,18 @@ public class NanodroneEntity extends Mob {
         return false;
     }
 
-    public int getComputerID() {
-        CompoundTag tag = entityData.get(EXTRA);
-        if(tag.contains("computerID"))
-        {
-            return tag.getInt("computerID");
-        }
-        return -1;
-    }
-    public UUID getComputerUUID() {
-        CompoundTag tag = entityData.get(EXTRA);
-        if(tag.contains("computerUUID"))
-        {
-            return tag.getUUID("computerUUID");
-        }
-        return null;
-    }
-    public void setAllData(CompoundTag tag) {
-        entityData.set(EXTRA,tag);
-    }
-    public CompoundTag getAllData() {
-        return entityData.get(EXTRA);
-    }
-
-    @Override
-    protected PathNavigation createNavigation(Level level) {
-        return new FlyingPathNavigation(this, level);
-    }
-
-
-    public void setTargetPos(Vec3 pos) {
-        this.targetPos = pos;
-    }
-
     public MethodResult moveTo(int x, int y, int z) {
         this.getNavigation().moveTo(x,y,z,1);
         return MethodResult.of(true,"Moving To "+x+" "+y+" "+z);
     }
 
-    private ServerComputer createOrUpkeepComputer() {
-        ServerContext context = ServerContext.get(this.getServer());
-        ServerComputer computer = context.registry().get(getComputerUUID());
-        if (computer == null) {
-            if (getComputerID() < 0) {
-                setComputerID(ComputerCraftAPI.createUniqueNumberedSaveDir(this.getServer(), IDAssigner.COMPUTER));
-            }
-
-            computer = new ServerComputer(
-                    (ServerLevel) this.level(), this.getOnPos(), ServerComputer.properties(getComputerID(), ComputerFamily.ADVANCED)
-                    .terminalSize(20,10)
-                    .addComponent(CCDrones.NANODRONEAPI,this)
-            );
-
-            //System.out.println("Computer ID: "+computer.getID());
-            setComputerUUID(computer.register());
-
-            computer.turnOn();
-        }
-        return computer;
+    public void setTargetPos(Vec3 pos) {
+        this.targetPos = pos;
     }
+
+
+
+    //death / entity hurt
 
     @Override
     protected void dropAllDeathLoot(DamageSource damageSource) {
@@ -405,7 +394,7 @@ public class NanodroneEntity extends Mob {
         compoundTag.remove("computerUUID");
 
         stack.setTag(compoundTag);
-        ItemEntity entity = new ItemEntity(level(),getX(),getY(),getZ(),stack);//TODO: drop item inside inventory if not empty
+        ItemEntity entity = new ItemEntity(level(),getX(),getY(),getZ(),stack);
         level().addFreshEntity(entity);
 
         ItemStack invItem = getInventory().getItem(0);
@@ -425,7 +414,41 @@ public class NanodroneEntity extends Mob {
     }
 
     @Override
-    public double getPassengersRidingOffset() {
-        return -2;
+    public boolean hurt(DamageSource source, float amount) {
+        Entity attacker = source.getEntity();
+        Entity direct = source.getDirectEntity();
+
+        if (attacker instanceof Player player) {
+            Object[] eventarg = new Object[2];
+            eventarg[0] = player.getGameProfile().getName();
+            eventarg[1] = amount;
+            ServerComputer computer = getServerComputer(this.getServer(),getComputerUUID());
+            if (computer != null) {
+                computer.queueEvent("nanodrone_hurt",eventarg);
+            }
+        } else if (direct != null) {
+            ResourceLocation id = BuiltInRegistries.ENTITY_TYPE.getKey(direct.getType());
+            Object[] eventarg = new Object[2];
+            eventarg[0] = id;
+            eventarg[1] = amount;
+            ServerComputer computer = getServerComputer(this.getServer(),getComputerUUID());
+            if (computer != null) {
+                computer.queueEvent("nanodrone_hurt",eventarg);
+            }
+        } else {
+            if (attacker instanceof LivingEntity entity) {
+                ResourceLocation id = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType());
+                Object[] eventarg = new Object[2];
+                eventarg[0] = id;
+                eventarg[1] = amount;
+                ServerComputer computer = getServerComputer(this.getServer(),getComputerUUID());
+                if (computer != null) {
+                    computer.queueEvent("nanodrone_hurt",eventarg);
+                }
+            }
+        }
+
+        return super.hurt(source, amount);
     }
+
 }

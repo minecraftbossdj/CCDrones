@@ -1,14 +1,20 @@
 package ace.actually.ccdrones.entities;
 
 import ace.actually.ccdrones.CCDrones;
+import ace.actually.ccdrones.entities.nanodrone.NanodroneInventory;
+import ace.actually.ccdrones.menu.DroneMenu;
 import dan200.computercraft.api.ComputerCraftAPI;
 import dan200.computercraft.core.computer.Computer;
 import dan200.computercraft.core.computer.ComputerSide;
+import dan200.computercraft.shared.ModRegistry;
 import dan200.computercraft.shared.computer.core.ComputerFamily;
 import dan200.computercraft.shared.computer.core.ServerComputer;
 import dan200.computercraft.shared.computer.core.ServerContext;
+import dan200.computercraft.shared.computer.inventory.ComputerMenuWithoutInventory;
 import dan200.computercraft.shared.config.Config;
+import dan200.computercraft.shared.container.SingleContainerData;
 import dan200.computercraft.shared.network.container.ComputerContainerData;
+import dan200.computercraft.shared.platform.PlatformHelper;
 import dan200.computercraft.shared.util.IDAssigner;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderGetter;
@@ -22,11 +28,9 @@ import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.Clearable;
-import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResult;
-import net.minecraft.world.MenuProvider;
+import net.minecraft.world.*;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -35,7 +39,10 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.MenuType;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -43,6 +50,8 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -50,10 +59,29 @@ public class DroneEntity extends Mob {
 
     private boolean shouldMakeBoot = false;
 
+    DroneBrain brain = new DroneBrain(this); //TODO: port more stuff over to DroneBrain so its actually useful and not just for GUI
+
+    //TODO: organize this shit AGAIN :sob:
+    //TODO: do more testing with this
+
     public static final EntityDataAccessor<CompoundTag> EXTRA = SynchedEntityData.defineId(DroneEntity.class, EntityDataSerializers.COMPOUND_TAG);
+    public static final EntityDataAccessor<CompoundTag> CLIENT_INVENTORY = SynchedEntityData.defineId(DroneEntity.class, EntityDataSerializers.COMPOUND_TAG);
+
     public DroneEntity(EntityType<DroneEntity> e,Level level) {
         super(e, level);
 
+    }
+
+    int INVENTORY_SIZE = 7;
+
+    public int getInvSize() {
+        return INVENTORY_SIZE;
+    }
+
+    private final DroneInventory inventory = new DroneInventory(INVENTORY_SIZE,this);
+
+    public Container getInventory() {
+        return inventory;
     }
 
     @Override
@@ -77,9 +105,52 @@ public class DroneEntity extends Mob {
     }
 
     @Override
+    public InteractionResult mobInteract(Player player, InteractionHand hand) {
+        ItemStack held = player.getItemInHand(hand);
+
+        if (!level().isClientSide) {
+            if (held.isEmpty()) {
+                ServerComputer computer = getServerComputer();
+                if (computer == null) {return InteractionResult.FAIL;}
+                PlatformHelper.get().openMenu(
+                        player,
+                        player.getItemInHand(hand).getHoverName(),
+                        (id, inventory, entity) ->
+                                new DroneMenu(
+                                        id,
+                                        (p) -> true,
+                                        ComputerFamily.ADVANCED,
+                                        computer,
+                                        null,
+                                        player.getInventory(),
+                                        this.getInventory(),
+                                        (SingleContainerData) brain::getSelectedSlot
+
+                                ),
+                        new ComputerContainerData(computer, ItemStack.EMPTY)
+                );
+            }
+        }
+
+        return InteractionResult.SUCCESS;
+    }
+
+    @Override
     public void addAdditionalSaveData(CompoundTag compoundTag) {
         super.addAdditionalSaveData(compoundTag);
         compoundTag.put("extra",entityData.get(EXTRA));
+
+
+        ListTag itemsList = new ListTag();
+        for (int i = 0; i < inventory.getContainerSize(); i++) {
+            if (!inventory.getItem(i).isEmpty()) {
+                CompoundTag itemTag = new CompoundTag();
+                itemTag.putByte("Slot", (byte) i);
+                inventory.getItem(i).save(itemTag);
+                itemsList.add(itemTag);
+            }
+        }
+        compoundTag.put("Inventory", itemsList);
     }
 
     @Override
@@ -87,12 +158,24 @@ public class DroneEntity extends Mob {
         super.defineSynchedData();
         CompoundTag a = new CompoundTag();
         entityData.define(EXTRA,a.copy());
+        entityData.define(CLIENT_INVENTORY, new CompoundTag());
     }
 
     @Override
     public void readAdditionalSaveData(CompoundTag compoundTag) {
         super.readAdditionalSaveData(compoundTag);
         entityData.set(EXTRA,compoundTag.getCompound("extra"));
+
+        ListTag itemsList = compoundTag.getList("Inventory", 10); // 10 = CompoundTag
+        for (int i = 0; i < itemsList.size(); i++) {
+            CompoundTag itemTag = itemsList.getCompound(i);
+            int slot = itemTag.getByte("Slot");
+            if (slot >= 0 && slot < inventory.getContainerSize()) {
+                inventory.setItem(slot, ItemStack.of(itemTag));
+            }
+        }
+
+        syncInventoryToClient();
     }
 
     public void setComputerID(int computerID) {
@@ -141,9 +224,10 @@ public class DroneEntity extends Mob {
             tag.remove("carryingState");
             entityData.set(EXTRA,tag,true);
         }
+    }
 
-
-
+    public boolean canPlayerUse(Player player) {
+        return true;
     }
 
     public boolean isCarryingBlock()
@@ -158,75 +242,38 @@ public class DroneEntity extends Mob {
         entityData.set(EXTRA,tag);
     }
 
-
-    public void addUpgrade(String upgrade) {
-        CompoundTag oldtag = entityData.get(EXTRA);
-        CompoundTag tag = oldtag.copy();
-
-        ListTag list;
-        if(tag.contains("upgrades"))
-        {
-            list = (ListTag) tag.get("upgrades");
-            list.add(StringTag.valueOf(upgrade));
-        }
-        else
-        {
-            list = new ListTag();
-            list.add(StringTag.valueOf(upgrade));
-        }
-        tag.put("upgrades",list);
-
-        entityData.set(EXTRA,tag);
-    }
-
-    public void removeUpgrades() {
-        CompoundTag oldtag = entityData.get(EXTRA);
-        CompoundTag tag = oldtag.copy();
-
-
-        if(tag.contains("upgrades"))
-        {
-            ListTag list = (ListTag) tag.get("upgrades");
-            for (int i = 0; i < list.size(); i++) {
-                String v = list.getString(i);
-                ItemStack stack = new ItemStack(CCDrones.UPGRADE_MAP.get(v));
-                ItemEntity entity = new ItemEntity(level(),getX(),getY(),getZ(),stack);
-                level().addFreshEntity(entity);
+    public void syncInventoryToClient() {
+        CompoundTag tag = new CompoundTag();
+        for (int i = 0; i < inventory.getContainerSize(); i++) {
+            ItemStack stack = inventory.getItem(i);
+            if (!stack.isEmpty()) {
+                CompoundTag itemTag = new CompoundTag();
+                stack.save(itemTag);
+                tag.put("Slot" + i, itemTag);
             }
-
-            tag.remove("upgrades");
         }
-
-
-
-        entityData.set(EXTRA,tag);
+        entityData.set(CLIENT_INVENTORY, tag);
     }
 
-    public ListTag getUpgrades()
-    {
-        CompoundTag tag = entityData.get(EXTRA);
-        if(tag.contains("upgrades"))
-        {
-            return (ListTag) tag.get("upgrades");
+    public ItemStack getSlotForRenderer(int slot) {
+        if (!level().isClientSide) return ItemStack.EMPTY;
+        CompoundTag tag = entityData.get(CLIENT_INVENTORY);
+        if(tag.contains("Slot" + slot)) {
+            return ItemStack.of(tag.getCompound("Slot" + slot));
         }
-        return null;
+        return ItemStack.EMPTY;
     }
-    public boolean hasUpgrade(String upgrade)
-    {
-        CompoundTag tag = entityData.get(EXTRA);
-        if(tag.contains("upgrades"))
-        {
-            ListTag list = (ListTag) tag.get("upgrades");
 
-            for (int i = 0; i < list.size(); i++) {
-                if(list.getString(i).equals(upgrade))
-                {
-                    return true;
-                }
-            }
 
+    public boolean hasUpgrade(String upgrade) {
+
+        Item stringItem = BuiltInRegistries.ITEM.get(new ResourceLocation(upgrade));
+
+        if (stringItem != null && stringItem != Items.AIR) {
+            return inventory.hasAnyOf(Set.of(stringItem));
         }
         return false;
+
     }
 
     public void setEngineOn(boolean on)
@@ -262,18 +309,16 @@ public class DroneEntity extends Mob {
         }
        return null;
     }
-    public void setAllData(CompoundTag tag)
-    {
+    public void setAllData(CompoundTag tag) {
         entityData.set(EXTRA,tag);
     }
-    public CompoundTag getAllData()
-    {
+    public CompoundTag getAllData() {
         return entityData.get(EXTRA);
     }
 
 
-    private ServerComputer createOrUpkeepComputer()
-    {
+
+    public ServerComputer createOrUpkeepComputer() {
         ServerContext context = ServerContext.get(this.getServer());
         ServerComputer computer = context.registry().get(getComputerUUID());
         if (computer == null) {
@@ -285,6 +330,7 @@ public class DroneEntity extends Mob {
             computer = new ServerComputer(
                     (ServerLevel) this.level(), this.getOnPos(), ServerComputer.properties(getComputerID(),ComputerFamily.ADVANCED)
                     .addComponent(CCDrones.DRONEAPI,this)
+                    .terminalSize(Config.TURTLE_TERM_WIDTH,Config.TURTLE_TERM_HEIGHT)
             );
 
             System.out.println("Computer ID: "+computer.getID());
@@ -301,6 +347,12 @@ public class DroneEntity extends Mob {
 
     }
 
+    public ServerComputer getServerComputer() {
+        ServerContext context = ServerContext.get(this.getServer());
+        ServerComputer computer = context.registry().get(getComputerUUID());
+        return computer;
+    }
+
     @Override
     protected void dropAllDeathLoot(DamageSource damageSource) {
         super.dropAllDeathLoot(damageSource);
@@ -311,19 +363,28 @@ public class DroneEntity extends Mob {
             computer.close();
         }
 
-        CompoundTag tag = entityData.get(EXTRA);
-        tag.remove("computerUUID");
-        entityData.set(EXTRA,tag);
-
         ItemStack stack = new ItemStack(CCDrones.DRONE_ITEM);
         CompoundTag compoundTag = new CompoundTag();
         compoundTag.put("extra",getAllData());
-        compoundTag.remove("computerUUID");
         stack.setTag(compoundTag);
         ItemEntity entity = new ItemEntity(level(),getX(),getY(),getZ(),stack);
         level().addFreshEntity(entity);
 
+        for (int i = 0; i < inventory.getContainerSize(); i++) {
+            ItemStack invItem = getInventory().getItem(i);
 
+            if (!invItem.isEmpty()) {
+                ItemEntity drop = new ItemEntity(
+                        this.level(),
+                        getX(),
+                        getY(),
+                        getZ(),
+                        invItem
+                );
+
+                level().addFreshEntity(drop);
+            }
+        }
     }
 
     @Override
